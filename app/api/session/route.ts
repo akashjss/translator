@@ -50,7 +50,6 @@ export async function POST(req: NextRequest) {
         model: "gpt-realtime-translate",
         audio: {
           input: {
-            transcription: { model: "gpt-realtime-whisper" },
             noise_reduction: { type: "near_field" },
           },
           output: { language: targetLanguage },

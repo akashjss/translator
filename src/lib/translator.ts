@@ -16,6 +16,7 @@ export interface TranslatorCallbacks {
   onStatus?: (status: TranslatorStatus) => void;
   onError?: (err: unknown) => void;
   onLatency?: (ms: number, kind: "input" | "output") => void;
+  onRemoteStream?: (stream: MediaStream) => void;
 }
 
 export interface TranslatorOptions extends TranslatorCallbacks {
@@ -28,6 +29,7 @@ export interface TranslatorHandle {
   pc: RTCPeerConnection;
   setMicEnabled: (enabled: boolean) => void;
   setRemoteVolume: (volume: number) => void;
+  getRemoteStream: () => MediaStream | null;
   close: () => void;
 }
 
@@ -68,6 +70,7 @@ export async function createTranslationSession(
     onStatus,
     onError,
     onLatency,
+    onRemoteStream,
   } = opts;
 
   let currentStatus: TranslatorStatus = "connecting";
@@ -76,6 +79,8 @@ export async function createTranslationSession(
     onStatus?.(s);
   };
   setStatus("connecting");
+
+  let remoteStreamRef: MediaStream | null = null;
 
   // Latency tracking
   let micEnabledAt: number | null = null;
@@ -110,9 +115,11 @@ export async function createTranslationSession(
   pc.ontrack = (e) => {
     const [stream] = e.streams;
     if (stream) {
+      remoteStreamRef = stream;
       remoteAudio.srcObject = stream;
       remoteAudio.autoplay = true;
       remoteAudio.play().catch(() => {});
+      onRemoteStream?.(stream);
     }
   };
 
@@ -203,6 +210,7 @@ export async function createTranslationSession(
 
   return {
     pc,
+    getRemoteStream: () => remoteStreamRef,
     setMicEnabled: (enabled: boolean) => {
       micTrack.enabled = enabled;
       clearDelayedTimer();

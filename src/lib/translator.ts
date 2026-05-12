@@ -9,13 +9,11 @@ export type TranslatorStatus =
   | "error";
 
 export interface TranslatorCallbacks {
-  onSourceTranscriptDelta?: (delta: string) => void;
-  onSourceTranscriptDone?: (text: string) => void;
   onTargetTranscriptDelta?: (delta: string) => void;
   onTargetTranscriptDone?: (text: string) => void;
   onStatus?: (status: TranslatorStatus) => void;
   onError?: (err: unknown) => void;
-  onLatency?: (ms: number, kind: "input" | "output") => void;
+  onLatency?: (ms: number) => void;
   onRemoteStream?: (stream: MediaStream) => void;
 }
 
@@ -63,8 +61,6 @@ export async function createTranslationSession(
     targetLang,
     micStream,
     remoteAudio,
-    onSourceTranscriptDelta,
-    onSourceTranscriptDone,
     onTargetTranscriptDelta,
     onTargetTranscriptDone,
     onStatus,
@@ -82,9 +78,8 @@ export async function createTranslationSession(
 
   let remoteStreamRef: MediaStream | null = null;
 
-  // Latency tracking
+  // Latency tracking — only output (we only get output transcripts from this model)
   let micEnabledAt: number | null = null;
-  let inputLatencyDone = false;
   let outputLatencyDone = false;
   let delayedTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -95,18 +90,12 @@ export async function createTranslationSession(
     }
   };
 
-  const onDelta = (kind: "input" | "output") => {
+  const onOutputDelta = () => {
     clearDelayedTimer();
     if (currentStatus === "delayed") setStatus("live");
-    if (micEnabledAt !== null && onLatency) {
-      if (kind === "input" && !inputLatencyDone) {
-        inputLatencyDone = true;
-        onLatency(Date.now() - micEnabledAt, "input");
-      }
-      if (kind === "output" && !outputLatencyDone) {
-        outputLatencyDone = true;
-        onLatency(Date.now() - micEnabledAt, "output");
-      }
+    if (micEnabledAt !== null && !outputLatencyDone && onLatency) {
+      outputLatencyDone = true;
+      onLatency(Date.now() - micEnabledAt);
     }
   };
 
@@ -133,13 +122,7 @@ export async function createTranslationSession(
 
   const dc = pc.createDataChannel("oai-events");
 
-  dc.onopen = () => {
-    dc.send(JSON.stringify({
-      type: "session.update",
-      session: { input_audio_transcription: { model: "whisper-1" } },
-    }));
-    setStatus("live");
-  };
+  dc.onopen = () => setStatus("live");
 
   dc.onmessage = (e) => {
     let event: { type?: string; delta?: string; transcript?: string };
@@ -148,17 +131,10 @@ export async function createTranslationSession(
     } catch {
       return;
     }
+    console.debug("[translator] event:", event.type, event);
     switch (event.type) {
-      case "session.input_transcript.delta":
-        onDelta("input");
-        if (event.delta) onSourceTranscriptDelta?.(event.delta);
-        break;
-      case "session.input_transcript.done":
-      case "session.input_transcript.completed":
-        if (event.transcript) onSourceTranscriptDone?.(event.transcript);
-        break;
       case "session.output_transcript.delta":
-        onDelta("output");
+        onOutputDelta();
         if (event.delta) onTargetTranscriptDelta?.(event.delta);
         break;
       case "session.output_transcript.done":
@@ -166,10 +142,9 @@ export async function createTranslationSession(
         if (event.transcript) onTargetTranscriptDone?.(event.transcript);
         break;
       case "error":
+        console.error("[translator] error event:", event);
         onError?.(event);
         break;
-      default:
-        if (event.type) console.debug("[translator] unhandled event:", event.type, event);
     }
   };
 
@@ -224,7 +199,6 @@ export async function createTranslationSession(
       clearDelayedTimer();
       if (enabled) {
         micEnabledAt = Date.now();
-        inputLatencyDone = false;
         outputLatencyDone = false;
         delayedTimer = setTimeout(() => setStatus("delayed"), DELAYED_MS);
       } else {

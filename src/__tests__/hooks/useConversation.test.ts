@@ -7,8 +7,6 @@ import type { TranslatorStatus } from "@/lib/translator";
 
 type SessionOpts = {
   onStatus?: (s: TranslatorStatus) => void;
-  onSourceTranscriptDelta?: (d: string) => void;
-  onSourceTranscriptDone?: (t: string) => void;
   onTargetTranscriptDelta?: (d: string) => void;
   onTargetTranscriptDone?: (t: string) => void;
   onRemoteStream?: (s: MediaStream) => void;
@@ -71,8 +69,8 @@ describe("useConversation", () => {
       const { result } = renderHook(() => useConversation());
       expect(result.current.status).toBe("idle");
       expect(result.current.error).toBeNull();
-      expect(result.current.transcript.sourceFinal).toBe("");
       expect(result.current.transcript.targetFinal).toBe("");
+      expect(result.current.transcript.targetInterim).toBe("");
       expect(result.current.micStream).toBeNull();
       expect(result.current.remoteStream).toBeNull();
     });
@@ -88,46 +86,18 @@ describe("useConversation", () => {
 
     it("resets transcript on re-start", async () => {
       const hook = await startHook();
-      act(() => { capturedOpts[0].onSourceTranscriptDone?.("Hello"); });
-      expect(hook.result.current.transcript.sourceFinal).toBe("Hello");
+      act(() => { capturedOpts[0].onTargetTranscriptDone?.("Hello"); });
+      expect(hook.result.current.transcript.targetFinal).toBe("Hello");
 
       act(() => { hook.result.current.stop(); });
       await act(async () => { hook.result.current.start("es"); });
       await act(async () => { await Promise.resolve(); });
 
-      expect(hook.result.current.transcript.sourceFinal).toBe("");
+      expect(hook.result.current.transcript.targetFinal).toBe("");
     });
   });
 
   describe("transcript accumulation", () => {
-    it("accumulates source interim deltas", async () => {
-      const hook = await startHook();
-      act(() => {
-        capturedOpts[0].onSourceTranscriptDelta?.("Hello");
-        capturedOpts[0].onSourceTranscriptDelta?.(" world");
-      });
-      expect(hook.result.current.transcript.sourceInterim).toBe("Hello world");
-    });
-
-    it("commits source interim to final on done and clears interim", async () => {
-      const hook = await startHook();
-      act(() => {
-        capturedOpts[0].onSourceTranscriptDelta?.("Hello");
-        capturedOpts[0].onSourceTranscriptDone?.("Hello");
-      });
-      expect(hook.result.current.transcript.sourceFinal).toBe("Hello");
-      expect(hook.result.current.transcript.sourceInterim).toBe("");
-    });
-
-    it("joins multiple finalized utterances with a space", async () => {
-      const hook = await startHook();
-      act(() => {
-        capturedOpts[0].onSourceTranscriptDone?.("Hello");
-        capturedOpts[0].onSourceTranscriptDone?.("world");
-      });
-      expect(hook.result.current.transcript.sourceFinal).toBe("Hello world");
-    });
-
     it("accumulates target interim deltas", async () => {
       const hook = await startHook();
       act(() => {
@@ -135,6 +105,25 @@ describe("useConversation", () => {
         capturedOpts[0].onTargetTranscriptDelta?.(" mundo");
       });
       expect(hook.result.current.transcript.targetInterim).toBe("Hola mundo");
+    });
+
+    it("commits target interim to final on done and clears interim", async () => {
+      const hook = await startHook();
+      act(() => {
+        capturedOpts[0].onTargetTranscriptDelta?.("Hola");
+        capturedOpts[0].onTargetTranscriptDone?.("Hola");
+      });
+      expect(hook.result.current.transcript.targetFinal).toBe("Hola");
+      expect(hook.result.current.transcript.targetInterim).toBe("");
+    });
+
+    it("joins multiple finalized utterances with a space", async () => {
+      const hook = await startHook();
+      act(() => {
+        capturedOpts[0].onTargetTranscriptDone?.("Hola");
+        capturedOpts[0].onTargetTranscriptDone?.("mundo");
+      });
+      expect(hook.result.current.transcript.targetFinal).toBe("Hola mundo");
     });
   });
 

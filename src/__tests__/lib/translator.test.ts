@@ -130,16 +130,6 @@ describe("createTranslationSession", () => {
       expect(statuses.at(-1)).toBe("live");
     });
 
-    it("sends session.update to enable input transcription on data channel open", async () => {
-      await buildHandle();
-      const sentPayloads = dc.send.mock.calls.map((c: [string]) => JSON.parse(c[0]));
-      const update = sentPayloads.find(
-        (p: { type?: string }) => p.type === "session.update",
-      );
-      expect(update).toBeDefined();
-      expect(update.session.input_audio_transcription).toBeDefined();
-    });
-
     it("goes to error on peer connection failure", async () => {
       const { statuses } = await buildHandle();
       pc.connectionState = "failed";
@@ -156,31 +146,13 @@ describe("createTranslationSession", () => {
   });
 
   describe("latency tracking", () => {
-    it("reports input latency from mic-enable to first input delta", async () => {
-      const latencies: Array<{ ms: number; kind: string }> = [];
+    it("reports latency from mic-enable to first output delta", async () => {
+      const latencies: number[] = [];
       const { handle } = await buildHandle({
         targetLang: "es",
         micStream: makeMockStream() as unknown as MediaStream,
         remoteAudio: makeMockAudio() as unknown as HTMLAudioElement,
-        onLatency: (ms, kind) => latencies.push({ ms, kind }),
-      });
-
-      handle.setMicEnabled(true);
-      vi.advanceTimersByTime(350);
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "Hola" });
-
-      expect(latencies).toHaveLength(1);
-      expect(latencies[0].kind).toBe("input");
-      expect(latencies[0].ms).toBeGreaterThanOrEqual(350);
-    });
-
-    it("reports output latency from mic-enable to first output delta", async () => {
-      const latencies: Array<{ ms: number; kind: string }> = [];
-      const { handle } = await buildHandle({
-        targetLang: "es",
-        micStream: makeMockStream() as unknown as MediaStream,
-        remoteAudio: makeMockAudio() as unknown as HTMLAudioElement,
-        onLatency: (ms, kind) => latencies.push({ ms, kind }),
+        onLatency: (ms) => latencies.push(ms),
       });
 
       handle.setMicEnabled(true);
@@ -188,62 +160,42 @@ describe("createTranslationSession", () => {
       emitEvent(dc, { type: "session.output_transcript.delta", delta: "Hello" });
 
       expect(latencies).toHaveLength(1);
-      expect(latencies[0].kind).toBe("output");
-      expect(latencies[0].ms).toBeGreaterThanOrEqual(820);
-    });
-
-    it("reports both input and output latency independently", async () => {
-      const latencies: Array<{ ms: number; kind: string }> = [];
-      const { handle } = await buildHandle({
-        targetLang: "es",
-        micStream: makeMockStream() as unknown as MediaStream,
-        remoteAudio: makeMockAudio() as unknown as HTMLAudioElement,
-        onLatency: (ms, kind) => latencies.push({ ms, kind }),
-      });
-
-      handle.setMicEnabled(true);
-      vi.advanceTimersByTime(300);
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "Hi" });
-      vi.advanceTimersByTime(500);
-      emitEvent(dc, { type: "session.output_transcript.delta", delta: "Hola" });
-
-      expect(latencies).toHaveLength(2);
-      expect(latencies.map((l) => l.kind)).toEqual(["input", "output"]);
+      expect(latencies[0]).toBeGreaterThanOrEqual(820);
     });
 
     it("does not double-report latency for subsequent deltas", async () => {
-      const latencies: Array<{ kind: string }> = [];
+      const latencies: number[] = [];
       const { handle } = await buildHandle({
         targetLang: "es",
         micStream: makeMockStream() as unknown as MediaStream,
         remoteAudio: makeMockAudio() as unknown as HTMLAudioElement,
-        onLatency: (_ms, kind) => latencies.push({ kind }),
+        onLatency: (ms) => latencies.push(ms),
       });
 
       handle.setMicEnabled(true);
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "A" });
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "B" });
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "C" });
+      emitEvent(dc, { type: "session.output_transcript.delta", delta: "A" });
+      emitEvent(dc, { type: "session.output_transcript.delta", delta: "B" });
+      emitEvent(dc, { type: "session.output_transcript.delta", delta: "C" });
 
-      expect(latencies.filter((l) => l.kind === "input")).toHaveLength(1);
+      expect(latencies).toHaveLength(1);
     });
 
     it("resets latency tracking when mic is toggled off and on", async () => {
-      const latencies: Array<{ kind: string }> = [];
+      const latencies: number[] = [];
       const { handle } = await buildHandle({
         targetLang: "es",
         micStream: makeMockStream() as unknown as MediaStream,
         remoteAudio: makeMockAudio() as unknown as HTMLAudioElement,
-        onLatency: (_ms, kind) => latencies.push({ kind }),
+        onLatency: (ms) => latencies.push(ms),
       });
 
       handle.setMicEnabled(true);
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "A" });
+      emitEvent(dc, { type: "session.output_transcript.delta", delta: "A" });
       expect(latencies).toHaveLength(1);
 
       handle.setMicEnabled(false);
       handle.setMicEnabled(true);
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "B" });
+      emitEvent(dc, { type: "session.output_transcript.delta", delta: "B" });
       expect(latencies).toHaveLength(2);
     });
   });
@@ -265,7 +217,7 @@ describe("createTranslationSession", () => {
       vi.advanceTimersByTime(8_000);
       expect(statuses.at(-1)).toBe("delayed");
 
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "Hi" });
+      emitEvent(dc, { type: "session.output_transcript.delta", delta: "Hi" });
       expect(statuses.at(-1)).toBe("live");
     });
 
@@ -274,7 +226,7 @@ describe("createTranslationSession", () => {
 
       handle.setMicEnabled(true);
       vi.advanceTimersByTime(2_000);
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "Hi" });
+      emitEvent(dc, { type: "session.output_transcript.delta", delta: "Hi" });
       vi.advanceTimersByTime(6_000);
 
       expect(statuses).not.toContain("delayed");
@@ -293,36 +245,6 @@ describe("createTranslationSession", () => {
   });
 
   describe("transcript events", () => {
-    it("fires onSourceTranscriptDelta for input delta events", async () => {
-      const deltas: string[] = [];
-      const { } = await buildHandle({
-        targetLang: "es",
-        micStream: makeMockStream() as unknown as MediaStream,
-        remoteAudio: makeMockAudio() as unknown as HTMLAudioElement,
-        onSourceTranscriptDelta: (d) => deltas.push(d),
-      });
-
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: "Hello" });
-      emitEvent(dc, { type: "session.input_transcript.delta", delta: " world" });
-
-      expect(deltas).toEqual(["Hello", " world"]);
-    });
-
-    it("fires onSourceTranscriptDone for both done event variants", async () => {
-      const done: string[] = [];
-      await buildHandle({
-        targetLang: "es",
-        micStream: makeMockStream() as unknown as MediaStream,
-        remoteAudio: makeMockAudio() as unknown as HTMLAudioElement,
-        onSourceTranscriptDone: (t) => done.push(t),
-      });
-
-      emitEvent(dc, { type: "session.input_transcript.done", transcript: "Hello world" });
-      emitEvent(dc, { type: "session.input_transcript.completed", transcript: "Buenos días" });
-
-      expect(done).toEqual(["Hello world", "Buenos días"]);
-    });
-
     it("fires onTargetTranscriptDelta for output delta events", async () => {
       const deltas: string[] = [];
       await buildHandle({
@@ -336,6 +258,21 @@ describe("createTranslationSession", () => {
       emitEvent(dc, { type: "session.output_transcript.delta", delta: " mundo" });
 
       expect(deltas).toEqual(["Hola", " mundo"]);
+    });
+
+    it("fires onTargetTranscriptDone for both done event variants", async () => {
+      const done: string[] = [];
+      await buildHandle({
+        targetLang: "es",
+        micStream: makeMockStream() as unknown as MediaStream,
+        remoteAudio: makeMockAudio() as unknown as HTMLAudioElement,
+        onTargetTranscriptDone: (t) => done.push(t),
+      });
+
+      emitEvent(dc, { type: "session.output_transcript.done", transcript: "Hola mundo" });
+      emitEvent(dc, { type: "session.output_transcript.completed", transcript: "Buenos días" });
+
+      expect(done).toEqual(["Hola mundo", "Buenos días"]);
     });
   });
 

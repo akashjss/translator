@@ -8,15 +8,11 @@ import {
 } from "@/lib/translator";
 
 export interface Transcript {
-  sourceFinal: string;
-  sourceInterim: string;
   targetFinal: string;
   targetInterim: string;
 }
 
 const emptyTranscript = (): Transcript => ({
-  sourceFinal: "",
-  sourceInterim: "",
   targetFinal: "",
   targetInterim: "",
 });
@@ -47,18 +43,6 @@ export function useConversation() {
     return audioElRef.current;
   };
 
-  const appendSource = useCallback((delta: string) => {
-    setTranscript((prev) => ({ ...prev, sourceInterim: prev.sourceInterim + delta }));
-  }, []);
-
-  const commitSource = useCallback((text: string) => {
-    setTranscript((prev) => ({
-      ...prev,
-      sourceFinal: (prev.sourceFinal ? prev.sourceFinal + " " : "") + text.trim(),
-      sourceInterim: "",
-    }));
-  }, []);
-
   const appendTarget = useCallback((delta: string) => {
     setTranscript((prev) => ({ ...prev, targetInterim: prev.targetInterim + delta }));
   }, []);
@@ -81,8 +65,6 @@ export function useConversation() {
       targetLang: targetLangRef.current,
       micStream: mic,
       remoteAudio: audioEl,
-      onSourceTranscriptDelta: appendSource,
-      onSourceTranscriptDone: commitSource,
       onTargetTranscriptDelta: appendTarget,
       onTargetTranscriptDone: commitTarget,
       onRemoteStream: (stream) => setRemoteStream(stream),
@@ -94,7 +76,7 @@ export function useConversation() {
         setError(e instanceof Error ? e.message : "Translation session error");
       },
     });
-  }, [appendSource, commitSource, appendTarget, commitTarget]);
+  }, [appendTarget, commitTarget]);
 
   const scheduleReconnect = useCallback(() => {
     if (!micStreamRef.current) return;

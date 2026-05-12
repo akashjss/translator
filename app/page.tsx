@@ -121,11 +121,11 @@ export default function HomePage() {
           <div className="flex items-center gap-4 text-xs text-gray-500">
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full bg-cyan-400" />
-              Input
+              You
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full bg-cyan-700" />
-              Output
+              Translation
             </span>
           </div>
         </div>
@@ -138,32 +138,18 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Transcripts */}
-      <div className="grid grid-cols-2 gap-10 mt-7">
-        <div>
-          <p className="text-sm font-semibold text-gray-700 mb-2">Input transcript</p>
-          <p className="text-sm text-gray-800 leading-relaxed min-h-[5rem]">
-            {transcript.sourceFinal}
-            {transcript.sourceInterim && (
-              <span className="text-gray-400"> {transcript.sourceInterim}</span>
-            )}
-            {!transcript.sourceFinal && !transcript.sourceInterim && (
-              <span className="text-gray-300">…</span>
-            )}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-gray-700 mb-2">Output transcript</p>
-          <p className="text-sm text-gray-800 leading-relaxed min-h-[5rem]">
-            {transcript.targetFinal}
-            {transcript.targetInterim && (
-              <span className="text-gray-400"> {transcript.targetInterim}</span>
-            )}
-            {!transcript.targetFinal && !transcript.targetInterim && (
-              <span className="text-gray-300">…</span>
-            )}
-          </p>
-        </div>
+      {/* Translation transcript */}
+      <div className="mt-7">
+        <p className="text-sm font-semibold text-gray-700 mb-2">Translation</p>
+        <p className="text-base text-gray-800 leading-relaxed min-h-[6rem]">
+          {transcript.targetFinal}
+          {transcript.targetInterim && (
+            <span className="text-gray-400"> {transcript.targetInterim}</span>
+          )}
+          {!transcript.targetFinal && !transcript.targetInterim && (
+            <span className="text-gray-300">…</span>
+          )}
+        </p>
       </div>
     </main>
   );

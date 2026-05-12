@@ -10,9 +10,16 @@ Mic ──► [active speaker toggle] ──┬──► PC1 (lang A → lang B)
 ```
 
 - Two `RTCPeerConnection`s stay open for the whole call, one per direction.
-- The active-speaker toggle (button or `Space` key) enables the mic track on one peer connection and disables it on the other.
+- The active-speaker toggle (button or `Space` key) enables the mic track on one peer connection and silences the other (sends zeroed audio so the stream stays continuous).
 - The Next.js API route at `/api/session` mints a short-lived translation client secret via `https://api.openai.com/v1/realtime/translations/client_secrets`, so your `OPENAI_API_KEY` never reaches the browser. The browser uses that ephemeral secret to POST its SDP offer directly to `https://api.openai.com/v1/realtime/translations/calls`.
-- Source-language captions are enabled by configuring `audio.input.transcription = { model: "gpt-realtime-whisper" }` in the client-secret request.
+- `gpt-realtime-translate` handles both speech recognition and translation in a single pass — no separate transcription model is needed.
+
+## Features
+
+- **Per-card audio controls** — mute/unmute translated output, volume slider, CC (subtitles) toggle.
+- **Latency badges** — each card shows measured input and output latency (mic-enable → first transcript delta) once the session is live.
+- **Reconnection** — on connection drop, automatically retries with exponential backoff (1 s → 2 s → 4 s, max 3 attempts). Status pill shows `Reconnecting…` during retries and `Unavailable` when retries are exhausted.
+- **Connection states** — `Idle`, `Connecting…`, `Live`, `Reconnecting…`, `Delayed`, `Unavailable`, `Closed`, `Error`.
 
 ## Run on your laptop
 
@@ -33,6 +40,15 @@ Mic ──► [active speaker toggle] ──┬──► PC1 (lang A → lang B)
 3. Open `http://localhost:3000`, allow microphone access, pick languages, hit **Start**.
 4. Tap a speaker card or press `Space` to switch who's talking.
 
+## Tests
+
+```bash
+pnpm test          # run once
+pnpm test:watch    # watch mode
+```
+
+Unit tests cover: status transitions, latency tracking, delayed detection, reconnect backoff, transcript accumulation, and `StatusPill` rendering.
+
 ## Phone (Phase 2)
 
 The app ships a `manifest.webmanifest`, so once deployed (e.g. `vercel deploy`) you can use Safari/Chrome's "Add to Home Screen" to install it like a native app. iOS Safari requires a user gesture before audio plays — the **Start** button satisfies that.
@@ -45,5 +61,4 @@ The app ships a `manifest.webmanifest`, so once deployed (e.g. `vercel deploy`) 
 - Echo on laptop speakers is mitigated only by browser AEC (`echoCancellation: true`). For best results use headphones or keep speaker volume modest.
 - If a speaker accidentally talks in the listener's language, the model may stay silent for that segment (per OpenAI: same-language passthrough).
 - No tab/system audio capture, no file upload.
-- No reconnect logic — if the connection drops, hit Stop then Start.
 - No persistence of transcripts.

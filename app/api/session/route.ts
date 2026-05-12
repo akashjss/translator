@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       session: {
         model: "gpt-realtime-translate",
+        input_audio_transcription: { model: "whisper-1" },
         audio: {
           input: {
             noise_reduction: { type: "near_field" },

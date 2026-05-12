@@ -133,7 +133,13 @@ export async function createTranslationSession(
 
   const dc = pc.createDataChannel("oai-events");
 
-  dc.onopen = () => setStatus("live");
+  dc.onopen = () => {
+    dc.send(JSON.stringify({
+      type: "session.update",
+      session: { input_audio_transcription: { model: "whisper-1" } },
+    }));
+    setStatus("live");
+  };
 
   dc.onmessage = (e) => {
     let event: { type?: string; delta?: string; transcript?: string };
@@ -162,6 +168,8 @@ export async function createTranslationSession(
       case "error":
         onError?.(event);
         break;
+      default:
+        if (event.type) console.debug("[translator] unhandled event:", event.type, event);
     }
   };
 

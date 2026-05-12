@@ -7,12 +7,13 @@ import type { TranslatorStatus } from "@/lib/translator";
 interface MockDC {
   readyState: string;
   close: ReturnType<typeof vi.fn>;
+  send: ReturnType<typeof vi.fn>;
   onopen: (() => void) | null;
   onmessage: ((e: { data: string }) => void) | null;
 }
 
 function makeMockDC(): MockDC {
-  return { readyState: "open", close: vi.fn(), onopen: null, onmessage: null };
+  return { readyState: "open", close: vi.fn(), send: vi.fn(), onopen: null, onmessage: null };
 }
 
 type MockPC = {

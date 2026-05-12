@@ -130,6 +130,16 @@ describe("createTranslationSession", () => {
       expect(statuses.at(-1)).toBe("live");
     });
 
+    it("sends session.update to enable input transcription on data channel open", async () => {
+      await buildHandle();
+      const sentPayloads = dc.send.mock.calls.map((c: [string]) => JSON.parse(c[0]));
+      const update = sentPayloads.find(
+        (p: { type?: string }) => p.type === "session.update",
+      );
+      expect(update).toBeDefined();
+      expect(update.session.input_audio_transcription).toBeDefined();
+    });
+
     it("goes to error on peer connection failure", async () => {
       const { statuses } = await buildHandle();
       pc.connectionState = "failed";

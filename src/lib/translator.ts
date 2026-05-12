@@ -2,6 +2,9 @@ export type TranslatorStatus =
   | "idle"
   | "connecting"
   | "live"
+  | "reconnecting"
+  | "delayed"
+  | "unavailable"
   | "closed"
   | "error";
 
@@ -12,6 +15,7 @@ export interface TranslatorCallbacks {
   onTargetTranscriptDone?: (text: string) => void;
   onStatus?: (status: TranslatorStatus) => void;
   onError?: (err: unknown) => void;
+  onLatency?: (ms: number, kind: "input" | "output") => void;
 }
 
 export interface TranslatorOptions extends TranslatorCallbacks {
@@ -30,6 +34,8 @@ export interface TranslatorHandle {
 const SESSION_URL = "/api/session";
 const TRANSLATIONS_CALLS_URL =
   "https://api.openai.com/v1/realtime/translations/calls";
+
+const DELAYED_MS = 8_000;
 
 async function mintClientSecret(targetLang: string): Promise<string> {
   const res = await fetch(SESSION_URL, {
@@ -61,10 +67,43 @@ export async function createTranslationSession(
     onTargetTranscriptDone,
     onStatus,
     onError,
+    onLatency,
   } = opts;
 
-  const setStatus = (s: TranslatorStatus) => onStatus?.(s);
+  let currentStatus: TranslatorStatus = "connecting";
+  const setStatus = (s: TranslatorStatus) => {
+    currentStatus = s;
+    onStatus?.(s);
+  };
   setStatus("connecting");
+
+  // Latency tracking
+  let micEnabledAt: number | null = null;
+  let inputLatencyDone = false;
+  let outputLatencyDone = false;
+  let delayedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearDelayedTimer = () => {
+    if (delayedTimer !== null) {
+      clearTimeout(delayedTimer);
+      delayedTimer = null;
+    }
+  };
+
+  const onDelta = (kind: "input" | "output") => {
+    clearDelayedTimer();
+    if (currentStatus === "delayed") setStatus("live");
+    if (micEnabledAt !== null && onLatency) {
+      if (kind === "input" && !inputLatencyDone) {
+        inputLatencyDone = true;
+        onLatency(Date.now() - micEnabledAt, "input");
+      }
+      if (kind === "output" && !outputLatencyDone) {
+        outputLatencyDone = true;
+        onLatency(Date.now() - micEnabledAt, "output");
+      }
+    }
+  };
 
   const pc = new RTCPeerConnection();
 
@@ -98,6 +137,7 @@ export async function createTranslationSession(
     }
     switch (event.type) {
       case "session.input_transcript.delta":
+        onDelta("input");
         if (event.delta) onSourceTranscriptDelta?.(event.delta);
         break;
       case "session.input_transcript.done":
@@ -105,6 +145,7 @@ export async function createTranslationSession(
         if (event.transcript) onSourceTranscriptDone?.(event.transcript);
         break;
       case "session.output_transcript.delta":
+        onDelta("output");
         if (event.delta) onTargetTranscriptDelta?.(event.delta);
         break;
       case "session.output_transcript.done":
@@ -122,8 +163,10 @@ export async function createTranslationSession(
       pc.connectionState === "failed" ||
       pc.connectionState === "disconnected"
     ) {
+      clearDelayedTimer();
       setStatus("error");
     } else if (pc.connectionState === "closed") {
+      clearDelayedTimer();
       setStatus("closed");
     }
   };
@@ -151,6 +194,7 @@ export async function createTranslationSession(
     const answerSdp = await ans.text();
     await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
   } catch (err) {
+    clearDelayedTimer();
     setStatus("error");
     onError?.(err);
     pc.close();
@@ -161,17 +205,23 @@ export async function createTranslationSession(
     pc,
     setMicEnabled: (enabled: boolean) => {
       micTrack.enabled = enabled;
+      clearDelayedTimer();
+      if (enabled) {
+        micEnabledAt = Date.now();
+        inputLatencyDone = false;
+        outputLatencyDone = false;
+        delayedTimer = setTimeout(() => setStatus("delayed"), DELAYED_MS);
+      } else {
+        micEnabledAt = null;
+      }
     },
     setRemoteVolume: (volume: number) => {
       remoteAudio.volume = Math.max(0, Math.min(1, volume));
     },
     close: () => {
-      try {
-        dc.close();
-      } catch {}
-      try {
-        micTrack.stop();
-      } catch {}
+      clearDelayedTimer();
+      try { dc.close(); } catch {}
+      try { micTrack.stop(); } catch {}
       pc.close();
       remoteAudio.srcObject = null;
       setStatus("closed");

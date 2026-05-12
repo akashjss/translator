@@ -11,17 +11,19 @@ export default function HomePage() {
     active,
     error,
     transcripts,
+    latency,
     start,
     stop,
     setSpeaker,
     toggleSpeaker,
+    setVolume,
   } = useConversation();
 
   const [langA, setLangA] = useState("en");
   const [langB, setLangB] = useState("es");
 
-  const isLive = status === "live" || status === "connecting";
-  const canStart = status === "idle" || status === "closed" || status === "error";
+  const isLive = status === "live" || status === "connecting" || status === "reconnecting" || status === "delayed";
+  const canStart = status === "idle" || status === "closed" || status === "error" || status === "unavailable";
 
   useEffect(() => {
     if (!isLive) return;
@@ -87,9 +89,11 @@ export default function HomePage() {
           outputLanguage={langB}
           onLanguageChange={setLangA}
           transcript={transcripts.AtoB}
+          latency={latency.AtoB}
           disabled={isLive}
           isActive={isLive && active === "A"}
           onActivate={() => isLive && setSpeaker("A")}
+          onVolumeChange={(v) => setVolume("AtoB", v)}
         />
         <DirectionCard
           side="right"
@@ -98,9 +102,11 @@ export default function HomePage() {
           outputLanguage={langA}
           onLanguageChange={setLangB}
           transcript={transcripts.BtoA}
+          latency={latency.BtoA}
           disabled={isLive}
           isActive={isLive && active === "B"}
           onActivate={() => isLive && setSpeaker("B")}
+          onVolumeChange={(v) => setVolume("BtoA", v)}
         />
       </section>
 

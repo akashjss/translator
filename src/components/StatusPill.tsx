@@ -6,6 +6,9 @@ const COPY: Record<TranslatorStatus, { label: string; dot: string }> = {
   idle: { label: "Idle", dot: "bg-neutral-500" },
   connecting: { label: "Connecting…", dot: "bg-yellow-400 animate-pulse" },
   live: { label: "Live", dot: "bg-emerald-400" },
+  reconnecting: { label: "Reconnecting…", dot: "bg-orange-400 animate-pulse" },
+  delayed: { label: "Delayed", dot: "bg-yellow-500 animate-pulse" },
+  unavailable: { label: "Unavailable", dot: "bg-red-600" },
   closed: { label: "Closed", dot: "bg-neutral-500" },
   error: { label: "Error", dot: "bg-red-500" },
 };

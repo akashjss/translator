@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { LANGUAGES } from "@/lib/languages";
-import type { DirectionTranscript } from "@/hooks/useConversation";
+import type { DirectionTranscript, DirectionLatency } from "@/hooks/useConversation";
 
 interface Props {
   side: "left" | "right";
@@ -10,9 +11,11 @@ interface Props {
   outputLanguage: string;
   onLanguageChange: (code: string) => void;
   transcript: DirectionTranscript;
+  latency: DirectionLatency;
   disabled: boolean;
   isActive: boolean;
   onActivate: () => void;
+  onVolumeChange: (v: number) => void;
 }
 
 export function DirectionCard({
@@ -22,27 +25,40 @@ export function DirectionCard({
   outputLanguage,
   onLanguageChange,
   transcript,
+  latency,
   disabled,
   isActive,
   onActivate,
+  onVolumeChange,
 }: Props) {
-  const accent =
-    side === "left" ? "border-sky-500/60" : "border-amber-500/60";
+  const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [subtitlesVisible, setSubtitlesVisible] = useState(true);
+
+  const accent = side === "left" ? "border-sky-500/60" : "border-amber-500/60";
   const ring = isActive
     ? side === "left"
       ? "ring-2 ring-sky-400 shadow-sky-500/30"
       : "ring-2 ring-amber-400 shadow-amber-500/30"
     : "";
   const activeBtn =
-    side === "left"
-      ? "bg-sky-500 text-white"
-      : "bg-amber-500 text-black";
+    side === "left" ? "bg-sky-500 text-white" : "bg-amber-500 text-black";
 
   const speakingLangLabel =
-    LANGUAGES.find((l) => l.code === speakingLanguage)?.label ??
-    speakingLanguage;
+    LANGUAGES.find((l) => l.code === speakingLanguage)?.label ?? speakingLanguage;
   const outputLangLabel =
     LANGUAGES.find((l) => l.code === outputLanguage)?.label ?? outputLanguage;
+
+  const handleMuteToggle = () => {
+    const next = !muted;
+    setMuted(next);
+    onVolumeChange(next ? 0 : volume);
+  };
+
+  const handleVolumeChange = (v: number) => {
+    setVolume(v);
+    if (!muted) onVolumeChange(v);
+  };
 
   return (
     <section
@@ -74,6 +90,38 @@ export function DirectionCard({
         </select>
       </header>
 
+      {/* Audio controls */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={handleMuteToggle}
+          className="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-200 hover:bg-neutral-700"
+          aria-label={muted ? "Unmute translated audio" : "Mute translated audio"}
+        >
+          {muted ? "🔇 Unmute" : "🔊 Mute"}
+        </button>
+
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={muted ? 0 : volume}
+          onChange={(e) => handleVolumeChange(Number(e.target.value))}
+          className="h-1 flex-1 cursor-pointer accent-neutral-400"
+          aria-label="Translation volume"
+        />
+
+        <button
+          type="button"
+          onClick={() => setSubtitlesVisible((v) => !v)}
+          className="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-200 hover:bg-neutral-700"
+          aria-label={subtitlesVisible ? "Hide subtitles" : "Show subtitles"}
+        >
+          {subtitlesVisible ? "CC on" : "CC off"}
+        </button>
+      </div>
+
       <button
         type="button"
         onClick={onActivate}
@@ -87,19 +135,23 @@ export function DirectionCard({
         {isActive ? "Speaking" : `Tap when ${speakerLabel} is speaking`}
       </button>
 
-      <div className="grid gap-2">
-        <TranscriptBlock
-          label="Heard"
-          finalText={transcript.sourceFinal}
-          interimText={transcript.sourceInterim}
-        />
-        <TranscriptBlock
-          label="Translated"
-          finalText={transcript.targetFinal}
-          interimText={transcript.targetInterim}
-          muted
-        />
-      </div>
+      {subtitlesVisible && (
+        <div className="grid gap-2">
+          <TranscriptBlock
+            label="Heard"
+            finalText={transcript.sourceFinal}
+            interimText={transcript.sourceInterim}
+          />
+          <TranscriptBlock
+            label="Translated"
+            finalText={transcript.targetFinal}
+            interimText={transcript.targetInterim}
+            muted
+          />
+        </div>
+      )}
+
+      <LatencyBadge latency={latency} />
     </section>
   );
 }
@@ -133,6 +185,17 @@ function TranscriptBlock({
           <span className="text-neutral-600">…</span>
         )}
       </div>
+    </div>
+  );
+}
+
+function LatencyBadge({ latency }: { latency: DirectionLatency }) {
+  const { input, output } = latency;
+  if (input === null && output === null) return null;
+  return (
+    <div className="flex gap-3 text-[10px] text-neutral-500">
+      {input !== null && <span>Input latency: {input}ms</span>}
+      {output !== null && <span>Output latency: {output}ms</span>}
     </div>
   );
 }
